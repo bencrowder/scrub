@@ -254,7 +254,8 @@ if __name__ == '__main__':
     # Get arguments
     if len(sys.argv) >= 2:
         filename = sys.argv[1]
-        output = '{}-new.epub'.format(os.path.splitext(filename)[0])
+        base_path = os.path.splitext(filename)[0]
+        output = '{}-scrubbed.epub'.format(base_path)
     else:
         print('Usage: scrub FILENAME.EPUB')
         sys.exit(-1)
@@ -270,7 +271,8 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     # Unzip to temp dir
-    tempdir = '_tmp_{}'.format(filename)
+    base_name = os.path.basename(base_path)
+    tempdir = '_tmp_{}'.format(base_name)
     unzip_epub(filename, tempdir)
 
     # Filter HTML files
