@@ -267,6 +267,7 @@ if __name__ == '__main__':
             PROFANITY_PATH,
             ex,
         ))
+        sys.exit(-1)
 
     # Unzip to temp dir
     tempdir = '_tmp_{}'.format(filename)
