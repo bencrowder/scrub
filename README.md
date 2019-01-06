@@ -1,8 +1,8 @@
 ## Scrub
 
-A Python script to bleep out profanity from EPUBs. (Acknowledging that not everyone cares about that, but some people very much do.)
+A Python script for bleeping out profanity in EPUBs. (Acknowledging that not everyone cares about that, but some people very much do.)
 
-It has been tested on macOS but not Linux or Windows.
+It has been tested on macOS but not Linux or Windows. If you come across an EPUB that it doesn't work with, let me know (or submit a PR).
 
 
 ### Installation and configuration
@@ -18,3 +18,8 @@ It has been tested on macOS but not Linux or Windows.
 Which will save the scrubbed EPUB as `pottymouth-scrubbed.epub` and also output a count of how many of each word were scrubbed.
 
 Bleeped words are all replaced with three bullet points.
+
+
+### License
+
+
