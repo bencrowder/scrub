@@ -1,0 +1,286 @@
+#!/usr/bin/env python
+
+import os
+import re
+import shutil
+import sys
+import zipfile
+
+
+PROFANITY_FILENAME = '.profanity'
+PROFANITY_PATH = os.path.join(os.path.expanduser('~'), PROFANITY_FILENAME)
+
+
+text_extensions = [
+    '.html',
+    '.xhtml',
+    '.htm',
+]
+
+stats = {}
+
+
+def load_profanities():
+    """
+    Loads the profanities into a list.
+    """
+    with open(PROFANITY_PATH, 'r') as f:
+        lines = f.readlines()
+
+    # Leave out any blank lines or lines that start with #
+    response = [
+        l.strip() for l in lines
+        if l[0] != '#' and l.strip() != ''
+    ]
+
+    return response
+
+
+def unzip_epub(filename, directory):
+    """
+    Unzips an EPUB into the given directory.
+    """
+    file = zipfile.ZipFile(filename, 'r')
+    file.extractall(directory)
+
+
+def zip_epub(filename, directory):
+    """
+    Zips the files in directory into filename.
+    """
+    file = zipfile.ZipFile(filename, 'w')
+
+    os.chdir(directory)
+
+    # Write mimetype
+    file.write('mimetype', 'mimetype', zipfile.ZIP_STORED)
+
+    # Write META-INF/container.xml
+    file.write(
+        'META-INF/container.xml',
+        'META-INF/container.xml',
+        zipfile.ZIP_DEFLATED,
+    )
+
+    # Add everything else
+    files = ['./META-INF/container.xml', './mimetype']
+    for root, dirs, filenames in os.walk('.'):
+        for filename in filenames:
+            if filename not in ['mimetype', 'META-INF']:
+                filename = os.path.join(root, filename)
+                if filename not in files:
+                    file.write(filename, filename, zipfile.ZIP_DEFLATED)
+                    files.append(filename)
+
+    # Leave the directory
+    os.chdir('..')
+
+
+def get_manifest_filename(directory):
+    """
+    Returns the manifest filename.
+    """
+    container = '{}/META-INF/container.xml'.format(directory)
+    with open(container, 'r') as f:
+        data = f.read()
+
+    regex = re.compile(r'<rootfile .*?full-path="(.+?)"', re.DOTALL)
+
+    m = re.search(regex, data)
+    if m:
+        return m.group(1)
+
+
+def parse_manifest(manifest, directory):
+    """
+    Parses a manifest.
+    """
+    with open('{}/{}'.format(directory, manifest), 'r') as f:
+        data = f.read()
+
+    m = re.search(
+        re.compile(r'<manifest>\s?(.*?)\s?</manifest>', re.DOTALL),
+        data,
+    )
+
+    if m:
+        contents = m.group(1)
+    else:
+        print('No manifest found. 0 files scrubbed.')
+        return []
+
+    # Split into lines based on newlines and tags
+    lines = re.split(r'\n|><', contents)
+
+    # And get the files
+    output = []
+    for line in lines:
+        m = re.search(
+            re.compile(r'href="(.+?)"', re.DOTALL),
+            line,
+        )
+
+        if m:
+            filename = m.group(1)
+            if (
+                os.path.splitext(filename)[1] in text_extensions
+                or
+                filename == 'toc.ncx'
+            ):
+                output.append(filename)
+
+    return output
+
+
+def get_file_list(directory):
+    """
+    Gets the list of HTML files for an EPUB directory.
+    """
+    # Get manifest
+    manifest_file = get_manifest_filename(directory)
+
+    # Get the directory for the EPUB
+    content_dir = os.path.dirname(manifest_file)
+
+    # Parse the manifest into a list of HTML files
+    filenames = parse_manifest(manifest_file, directory)
+
+    # Make sure the manifest loaded properly
+    if len(filenames) == 0:
+        print('No files found. Nothing scrubbed.')
+
+    # Prep directory
+    directory = os.path.join(directory, content_dir)
+
+    # Go through files
+    output = []
+    for filename in filenames:
+        extension = os.path.splitext(filename)[1]
+
+        if extension in text_extensions:
+            output.append('{}/{}'.format(directory, filename))
+
+    return output
+
+
+def filter(s, profanities):
+    """
+    Filters the given string.
+    """
+    for p in profanities:
+        # Generate stats
+        if p not in stats:
+            stats[p] = 0
+
+        for w in re.findall(r'{}'.format(p), s, re.IGNORECASE):
+            stats[p] += 1
+
+        # And replace it
+        s = re.sub(re.compile(p, re.IGNORECASE), r'•••', s)
+
+    return s
+
+
+def filter_file(filename, profanities):
+    """
+    Filtess the given file in-place.
+    """
+    # Read it
+    with open(filename, 'r') as f:
+        text = f.read()
+
+    # Filter it
+    text = filter(text, profanities)
+
+    # Save it back out again
+    with open(filename, 'w') as f:
+        f.write(text)
+
+
+def filter_directory(directory, profanities):
+    """
+    Filters the HTML files for a given directory.
+    """
+    # Get manifest
+    filenames = get_file_list(directory)
+    count = 0
+
+    for filename in filenames:
+        extension = os.path.splitext(filename)[1]
+
+        if extension in text_extensions:
+            filter_file(filename, profanities)
+            count += 1
+
+    print('{} file{} scrubbed.'.format(count, 's' if count != 1 else ''))
+
+
+def clean_directory(directory):
+    """
+    Removes the temp directory.
+    """
+    shutil.rmtree(directory)
+
+
+def censor_word(word):
+    """
+    Censors the given word.
+    """
+    return word[0] + re.sub(r'.', r'•', word[1:])
+
+
+def print_stats():
+    """
+    Prints out stats on words replaced.
+    """
+    if made_changes():
+        for word in stats.keys():
+            print('{}: {}'.format(censor_word(word), stats[word]))
+    else:
+        print('No replacements made.')
+
+
+def made_changes():
+    """
+    Returns true if changes made.
+    """
+    for k in stats.keys():
+        if k in stats and stats[k] != 0:
+            return True
+    return False
+
+
+if __name__ == '__main__':
+    # Get arguments
+    if len(sys.argv) >= 2:
+        filename = sys.argv[1]
+        output = '{}-new.epub'.format(os.path.splitext(filename)[0])
+    else:
+        print('Usage: scrub FILENAME.EPUB')
+        sys.exit(-1)
+
+    # Load profanities
+    try:
+        profanities = load_profanities()
+    except Exception as ex:
+        print('Error loading profanities from {}: {}'.format(
+            PROFANITY_PATH,
+            ex,
+        ))
+
+    # Unzip to temp dir
+    tempdir = '_tmp_{}'.format(filename)
+    unzip_epub(filename, tempdir)
+
+    # Filter HTML files
+    filter_directory(tempdir, profanities)
+
+    if made_changes():
+        # Rezip the EPUB
+        zip_epub(output, tempdir)
+
+    # Clean up
+    clean_directory(tempdir)
+
+    # Print stats
+    print_stats()
