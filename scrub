@@ -168,14 +168,21 @@ def filter(s, profanities):
     Filters the given string.
     """
     for p in profanities:
-        regex = p[0].replace('\\b', r'\b')
+        regex = p[0]
 
-        # Generate stats
-        if regex not in stats:
-            stats[regex] = 0
+        # Process word boundary properly
+        regex = regex.replace('\\b', r'\b')
+
+        # Shorthand
+        regex = regex.replace('.*', r'\b\w*?')
+        regex = regex.replace('*.', r'\w*?\b')
+
+        # Generate stats (this is inefficient)
+        if p[0] not in stats:
+            stats[p[0]] = 0
 
         for w in re.findall(r'{}'.format(regex), s, re.IGNORECASE):
-            stats[regex] += 1
+            stats[p[0]] += 1
 
         # And replace it
         s = re.sub(re.compile(regex, re.IGNORECASE), r'•••', s)
