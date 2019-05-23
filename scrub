@@ -29,7 +29,7 @@ def load_profanities():
 
     # Leave out any blank lines or lines that start with #
     response = [
-        l.strip() for l in lines
+        l.strip().split('\t') for l in lines
         if l[0] != '#' and l.strip() != ''
     ]
 
@@ -168,15 +168,17 @@ def filter(s, profanities):
     Filters the given string.
     """
     for p in profanities:
-        # Generate stats
-        if p not in stats:
-            stats[p] = 0
+        regex = p[0].replace('\\b', r'\b')
 
-        for w in re.findall(r'{}'.format(p), s, re.IGNORECASE):
-            stats[p] += 1
+        # Generate stats
+        if regex not in stats:
+            stats[regex] = 0
+
+        for w in re.findall(r'{}'.format(regex), s, re.IGNORECASE):
+            stats[regex] += 1
 
         # And replace it
-        s = re.sub(re.compile(p, re.IGNORECASE), r'•••', s)
+        s = re.sub(re.compile(regex, re.IGNORECASE), r'•••', s)
 
     return s
 
@@ -229,13 +231,18 @@ def censor_word(word):
     return word[0] + re.sub(r'.', r'•', word[1:])
 
 
-def print_stats():
+def print_stats(profanities):
     """
     Prints out stats on words replaced.
     """
+    # Build a label index
+    labels = {}
+    for p in profanities:
+        labels[p[0]] = p[1] if len(p) > 1 else censor_word(p[0])
+
     if made_changes():
-        for word in stats.keys():
-            print('{}: {}'.format(censor_word(word), stats[word]))
+        for regex in stats.keys():
+            print('{}: {}'.format(labels[regex], stats[regex]))
     else:
         print('No replacements made.')
 
@@ -286,4 +293,4 @@ if __name__ == '__main__':
     clean_directory(tempdir)
 
     # Print stats
-    print_stats()
+    print_stats(profanities)
